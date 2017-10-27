@@ -1,11 +1,13 @@
 #include "mediaclient.h"
 #include <QDebug>
+#include <QRegExp>
 #include <QXmlStreamReader>
 #include "pjsua.h"
 #include <QThread>
 
 
 bool MediaClient::quit_flag = false;
+QMap<QString,TransportContext> MediaClient::m_tsxContextMap;
 pjsip_endpoint* MediaClient::m_sipEndpt = NULL;
 
 static pjsip_module serverSipMoudle =
@@ -51,16 +53,6 @@ static void call_on_send_ack(pjsip_inv_session *inv, pjsip_rx_data *rdata)
     status = pjsip_inv_send_msg( inv,tdata);
     pj_assert(status == PJ_SUCCESS);
     qDebug()<<"call_on_send_ack ......";
-}
-
-/* regc callback */
-static void register_cb(struct pjsip_regc_cbparam *param)
-{
-    pjsip_regc_info info;
-    pj_status_t status; 
-    status = pjsip_regc_get_info(param->regc, &info);
-    pj_assert(status == PJ_SUCCESS);
-    MediaClient *client = (MediaClient *)param->token;
 }
 
 QString MediaClient::createPlaySDP(QString fromDeviceid, QString mediaRecvIp, unsigned short mediaRecvPort)
@@ -132,10 +124,35 @@ pj_bool_t MediaClient::on_rx_request( pjsip_rx_data *rdata ){
     pjsip_transaction *tsx;
     pjsip_tx_data *tdata;
     rdata_info = pjsip_rx_data_get_info(rdata);
+
     status = pjsip_tsx_create_uas(&serverSipMoudle, rdata, &tsx);
     pjsip_tsx_recv_msg(tsx, rdata);
     status = pjsip_endpt_create_response(m_sipEndpt, rdata, 200, NULL, &tdata);
     pjsip_tsx_send_msg(tsx, tdata);
+
+
+    if(PJSIP_REGISTER_METHOD == rdata->msg_info.cseq->method.id)
+    {
+        char fromstr[64] = {0};
+        memcpy(fromstr, rdata->msg_info.via->branch_param.ptr + rdata->msg_info.via->branch_param.slen, 64);
+        QStringList list = QString(fromstr).split(" ");
+        QString toid;
+        if(list.size() > 2)
+        {
+            QString temp = list[1].section(':', 1, 1, QString::SectionSkipEmpty);
+            toid = temp.section('@', 0, 0, QString::SectionSkipEmpty);
+        }
+        char *fromip = rdata->pkt_info.src_name;
+        int fromport = rdata->pkt_info.src_port;
+        TransportContext context;
+        context.toIP = QString(fromip);
+        context.toPort = fromport;
+        context.toID = toid;
+        context.sipDomain = toid.left(10);
+        m_tsxContextMap.insert( QString(fromip), context);
+
+    }
+
     return PJ_TRUE;
 }
 
@@ -305,7 +322,11 @@ void MediaClient::messageResolve(char *txt)
 
 void MediaClient::onStop()
 {
-    m_rtpRecver->destroy();
+    if(m_rtpRecver)
+    {
+        m_rtpRecver->destroy();
+        m_rtpRecver->quit();
+    }
     this->sendBye();
 }
 
@@ -338,6 +359,12 @@ MediaClient::MediaClient(QWidget *parent) : QWidget(parent)
 
 MediaClient::~MediaClient()
 {
+    quit_flag = true;
+    if(m_rtpRecver)
+    {
+        m_rtpRecver->destroy();
+        m_rtpRecver->quit();
+    }
     this->quit();
 }
 
@@ -352,7 +379,7 @@ void MediaClient::setUpUI()
     m_lblocalip = new QLabel("LocalIP:", m_widget);
     m_lblocalip->setFixedSize(QSize(100,25));
     m_lblocalip->move(20,20);
-    m_edlocalip = new QLineEdit("192.168.7.179",m_widget);
+    m_edlocalip = new QLineEdit("192.168.21.76",m_widget);
     m_edlocalip->setFixedSize(QSize(200,25));
     m_edlocalip->move(150,20);
     //server
@@ -397,7 +424,7 @@ void MediaClient::setUpUI()
     m_lbmediarecvip = new QLabel("MeidaRecvIP:", m_widget);
     m_lbmediarecvip->setFixedSize(QSize(100,25));
     m_lbmediarecvip->move(20,520);
-    m_edmediarecvip = new QLineEdit("192.168.7.179",m_widget);
+    m_edmediarecvip = new QLineEdit("192.168.21.76",m_widget);
     m_edmediarecvip->setFixedSize(QSize(200,25));
     m_edmediarecvip->move(150,520);
     m_lbmediarecvport = new QLabel("MeidaRecvPort:", m_widget);

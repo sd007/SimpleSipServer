@@ -16,7 +16,7 @@ int main(int argc, char *argv[])
 
     mlient.initDecoder();
     mlient.show();
-    qDebug()<<"started";
+    qDebug()<<"simple server started!";
     return app.exec();
 }
 

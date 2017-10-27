@@ -18,8 +18,9 @@
 #include <QString>
 
 
-typedef struct
+typedef struct tagTransportContext
 {
+    QString sipDomain;
     QString fromID;
     QString fromIP;
     unsigned short fromPort;
@@ -32,6 +33,11 @@ typedef struct
     QString contactIP;
     unsigned short contactPort;
 
+    tagTransportContext(){
+        fromPort = 5060;
+        toPort = 5060;
+        contactPort = 5060;
+    }
 }TransportContext;
 
 

@@ -2,6 +2,7 @@
 #define MEDIACLIENT_H
 
 #include <QObject>
+#include <QMap>
 #include <QLabel>
 #include <QLineEdit>
 #include <QWidget>
@@ -87,6 +88,7 @@ private:
     //decoder
     RtpRecver *m_rtpRecver  = Q_NULLPTR;
     Decoder *m_avDecoder  = Q_NULLPTR;
+    static QMap<QString,TransportContext> m_tsxContextMap;
 signals:
 
 public slots:
